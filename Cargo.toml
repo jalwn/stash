@@ -1,0 +1,11 @@
+[package]
+name = "stash"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.40", features = ["derive"] }
+flate2 = { version = "1.0.17", features = ["zlib-rs"], default-features = false }
+
+[profile.release]
+debug = 1
