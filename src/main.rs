@@ -1,39 +1,66 @@
-use std::env;
-use std::fs::File;
-use std::io::{self, BufReader, BufWriter};
-use flate2::Compression;
-use flate2::write::ZlibEncoder;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Name of the person to greet
-    #[arg(short, long)]
-    name: String,
+    #[command(subcommand)]
+    command: Commands,
+}
 
-    /// Number of times to greet
-    #[arg(short, long, default_value_t = 1)]
-    count: u8,
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Compress and upload a file to FTP
+    Upload {
+        #[arg(short = 'f', long)]
+        file_path: String,
+        #[arg(short = 'a', long)]
+        ftp_addr: String,
+        #[arg(short = 'p', long)]
+        ftp_pass: String,
+        #[arg(short = 'u', long)]
+        ftp_user: String,
+        #[arg(short = 'd', long)]
+        ftp_cwd: String,
+    },
+    /// Just compress a file locally
+    Compress {
+        #[arg(short, long)]
+        file_path: String,
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+    /// Decompress a .zlib file to a directory
+    Decompress {
+        #[arg(short, long)]
+        input: String,
+        #[arg(short, long)]
+        output: Option<String>,
+    },
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    
-    let file_path = &args[1];
+    let args = Args::parse();
 
-    println!("file to compress: {file_path}");
 
-    let source_file = File::open(file_path).expect("unable to open src file.");
-    let mut reader = BufReader::new(source_file);
-
-    let compressed_file_path: String = format!("{file_path}.zlib");
-    let dest_file = File::create(compressed_file_path).expect("unable to create compressed file.");
-    let writer = BufWriter::new(dest_file);
-
-    let mut encoder = ZlibEncoder::new(writer, Compression::default());
-    io::copy(&mut reader, &mut encoder).expect("compress failed at io-copy");
-    let _writer = encoder.finish().expect("compress failed at flush");
-    println!("File compressed successfully!");
-
+    match args.command {
+        Commands::Upload { file_path, ftp_addr, ftp_pass, ftp_user, ftp_cwd } => {
+            // Call your upload logic here
+            println!("uploading {file_path} to {ftp_addr} as {ftp_user}");
+            let mut ftp_stream = stash::ftp_connect(&ftp_addr, &ftp_user, &ftp_pass, &ftp_cwd).unwrap();
+            stash::compress_to_ftp(&file_path, &mut ftp_stream).unwrap();
+            println!("file compressed successfully!");
+            let _ = ftp_stream.quit();
+        }
+        Commands::Compress { file_path, output } => {
+            // Call your compress logic here
+            println!("compressing {file_path} to {:?}", output);
+            stash::compress_to_dir(&file_path, output.as_deref()).unwrap();
+            println!("file compressed successfully!");
+        }
+        Commands::Decompress { input, output } => {
+            println!("decompressing {input} to {:?}", output);
+            stash::decompress_file(&input, output.as_deref()).unwrap();
+            println!("file decompressed successfully!");
+        }
+    }
 }
